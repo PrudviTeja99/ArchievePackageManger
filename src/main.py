@@ -310,7 +310,7 @@ class ArchivePackageManager(QtWidgets.QDialog):
         
         self.worker.progress.connect(self.progress_dialog.setValue)
         self.worker.finished.connect(self.on_extraction_finished)
-        self.progress_dialog.canceled.connect(self.worker.terminate)
+        self.progress_dialog.canceled.connect(self.worker.cancel)
         
         self.worker.start()
         

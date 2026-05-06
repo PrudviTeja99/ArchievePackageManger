@@ -12,7 +12,11 @@ class ExtractionWorker(QtCore.QThread):
     def __init__(self, file_path):
         super().__init__()
         self.file_path = file_path
+        self._is_cancelled = False
         
+    def cancel(self):
+        self._is_cancelled = True
+
     def run(self):
         try:
             file_path = Path(self.file_path)
@@ -67,6 +71,10 @@ class ExtractionWorker(QtCore.QThread):
                     simple_base = base_name.split('-')[0].split('_')[0].lower()
                     
                     for i, member in enumerate(members):
+                        if self._is_cancelled:
+                            self.finished.emit(False, "", "", "", "", "Extraction cancelled")
+                            return
+
                         # Strip the common top-level directory to prevent double-folders
                         if common_prefix:
                             parts = member.name.split('/')
@@ -153,6 +161,10 @@ class ExtractionWorker(QtCore.QThread):
                 os.chmod(dest_path, 0o755)
                 self.progress.emit(50)
                 
+                if self._is_cancelled:
+                    self.finished.emit(False, "", "", "", "", "Extraction cancelled")
+                    return
+
                 default_exec = str(dest_path)
                 default_icon = ""
                 
@@ -165,12 +177,20 @@ class ExtractionWorker(QtCore.QThread):
                     except Exception:
                         pass
                         
+                    if self._is_cancelled:
+                        self.finished.emit(False, "", "", "", "", "Extraction cancelled")
+                        return
+
                     squashfs_root = Path(tmpdir) / 'squashfs-root'
                     best_icon_score = -1
                     best_desktop_score = -1
                     if squashfs_root.exists():
                         for root, _, files in os.walk(squashfs_root):
+                            if self._is_cancelled:
+                                break
                             for file in files:
+                                if self._is_cancelled:
+                                    break
                                 if file.lower().endswith(('.png', '.svg')):
                                     file_path_full = os.path.join(root, file)
                                     if os.path.islink(file_path_full):
@@ -230,10 +250,11 @@ class ExtractionWorker(QtCore.QThread):
 class CleanupWorker(QtCore.QThread):
     finished = QtCore.pyqtSignal()
     
-    def __init__(self, extracted_path, original_exec_path):
+    def __init__(self, extracted_path, original_exec_path, icon_path=None):
         super().__init__()
         self.extracted_path = extracted_path
         self.original_exec_path = original_exec_path
+        self.icon_path = icon_path
         
     def run(self):
         try:
