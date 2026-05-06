@@ -75,6 +75,11 @@ class ExtractionWorker(QtCore.QThread):
                             self.finished.emit(False, "", "", "", "", "Extraction cancelled")
                             return
 
+                        # Security check: prevent directory traversal
+                        if os.path.isabs(member.name) or ".." in member.name:
+                            print(f"Warning: Skipping suspicious file path in archive: {member.name}")
+                            continue
+
                         # Strip the common top-level directory to prevent double-folders
                         if common_prefix:
                             parts = member.name.split('/')
