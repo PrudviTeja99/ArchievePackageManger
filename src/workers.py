@@ -173,18 +173,33 @@ class ExtractionWorker(QtCore.QThread):
                 
                 with tempfile.TemporaryDirectory() as tmpdir:
                     try:
-                        subprocess.run([str(dest_path), '--appimage-extract'], cwd=tmpdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    except Exception:
-                        pass
+                        # Extract AppImage metadata with a timeout to prevent hanging
+                        result = subprocess.run(
+                            [str(dest_path), '--appimage-extract'], 
+                            cwd=tmpdir, 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            timeout=30
+                        )
+                        if result.returncode != 0:
+                            print(f"AppImage extraction failed: {result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        print("AppImage extraction timed out")
+                    except Exception as e:
+                        print(f"AppImage extraction error: {e}")
                         
                     if self._is_cancelled:
                         self.finished.emit(False, "", "", "", "", "Extraction cancelled")
                         return
 
                     squashfs_root = Path(tmpdir) / 'squashfs-root'
-                    best_icon_score = -1
-                    best_desktop_score = -1
-                    if squashfs_root.exists():
+                    if not squashfs_root.exists():
+                        # If extraction failed, we still have the AppImage itself as the executable
+                        print("Warning: squashfs-root not found. Could not auto-discover icons/desktop files.")
+                    else:
+                        best_icon_score = -1
+                        best_desktop_score = -1
                         for root, _, files in os.walk(squashfs_root):
                             if self._is_cancelled:
                                 break
